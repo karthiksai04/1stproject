@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Sign In | CartCompass BI</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="login-page">
+    <main class="login-card">
+        <div class="login-brand">
+            <span class="login-brand-icon" aria-hidden="true">C</span>
+            <div>
+                <h1>CartCompass BI</h1>
+                <p>Sign in to your dashboard</p>
+            </div>
+        </div>
+
+        {% if error %}
+        <p class="login-error" role="alert">{{ error }}</p>
+        {% endif %}
+
+        {% if not auth_configured %}
+        <p class="login-help">Set DASHBOARD_USERNAME and DASHBOARD_PASSWORD_HASH in the application environment to enable sign-in.</p>
+        {% endif %}
+
+        <form class="login-form" method="post" action="{{ url_for('login') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label for="username">Username</label>
+            <input id="username" name="username" type="text" autocomplete="username" value="{{ username }}" required autofocus>
+
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+            <button type="submit" {% if not auth_configured %}disabled{% endif %}>Sign In</button>
+        </form>
+    </main>
+</body>
+</html>

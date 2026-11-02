@@ -4,6 +4,7 @@ Provides endpoints for summary KPIs and performance indicators.
 """
 
 from flask import Blueprint, request, jsonify
+from backend.db import query_db
 from backend.services.analytics import get_kpis
 
 kpis_bp = Blueprint("kpis", __name__)
@@ -41,4 +42,26 @@ def fetch_kpis():
         return jsonify({
             "status": "error",
             "message": "An error occurred while computing KPIs."
+        }), 500
+
+
+@kpis_bp.route("/dashboard-summary", methods=["GET"])
+def fetch_dashboard_summary():
+    """Return live dataset counts used by the shared sidebar widget."""
+    try:
+        summary = query_db(
+            """
+            SELECT
+                (SELECT COUNT(*) FROM orders) AS total_orders,
+                (SELECT COUNT(*) FROM orders WHERE order_status = 'delivered') AS delivered_orders,
+                (SELECT COUNT(*) FROM products) AS total_products,
+                (SELECT COALESCE(SUM(quantity), 0) FROM order_items) AS total_items;
+            """,
+            one=True
+        )
+        return jsonify({"status": "success", "data": summary}), 200
+    except Exception:
+        return jsonify({
+            "status": "error",
+            "message": "An error occurred while loading dataset counts."
         }), 500

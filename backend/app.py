@@ -3,18 +3,20 @@ CartCompass-BI - Flask Application Factory & Server
 Main application entry point providing RESTful BI endpoints and serving the dashboard UI.
 """
 
-import os
+import hmac
+import secrets
 import sys
 from datetime import datetime
 from pathlib import Path
-from flask import Flask, jsonify, request, send_from_directory, render_template_string
+from flask import Flask, jsonify, redirect, render_template, request, send_from_directory, session, url_for
+from werkzeug.security import check_password_hash
 
 # Base Paths
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
 from backend.config import Config
-from backend.db import close_db, get_db_connection, query_db
+from backend.db import close_db, get_db_connection
 from backend.routes.kpis import kpis_bp
 from backend.routes.revenue import revenue_bp
 from backend.routes.categories import categories_bp
@@ -30,13 +32,47 @@ def create_app(config_class=Config):
     """
     app = Flask(
         __name__,
-        static_folder=str(BASE_DIR / "frontend"),
-        static_url_path=""
+        static_folder=None,
+        template_folder=str(getattr(config_class, "FRONTEND_DIR", BASE_DIR / "frontend"))
     )
     app.config.from_object(config_class)
 
     # Register Database teardown hook
     app.teardown_appcontext(close_db)
+
+    @app.before_request
+    def require_dashboard_login():
+        frontend_dir = Path(app.config.get("FRONTEND_DIR", BASE_DIR / "frontend"))
+        path = request.view_args.get("path", "") if request.view_args else ""
+        extensionless_html = frontend_dir / f"{path}.html"
+        is_frontend_page = (
+            request.endpoint in {
+                "serve_dashboard",
+                "serve_revenue",
+                "serve_categories",
+                "serve_regions",
+                "serve_reports",
+                "serve_upload",
+            }
+            or request.path.lower().endswith(".html")
+            or (
+                request.endpoint == "serve_frontend_static"
+                and not Path(path).suffix
+                and extensionless_html.is_file()
+            )
+        )
+        if request.endpoint is None or request.endpoint in {"login", "logout", "health_check"}:
+            return None
+
+        is_public_asset = request.endpoint == "serve_frontend_static" and not is_frontend_page
+        is_authenticated = (
+            session.get("logged_in") and session.get("username")
+        )
+        if not is_public_asset and not is_authenticated:
+            if request.path.startswith("/api/"):
+                return jsonify({"status": "error", "message": "Authentication required."}), 401
+            return redirect(url_for("login"))
+        return None
 
     # Register API Blueprints
     app.register_blueprint(kpis_bp, url_prefix="/api")
@@ -109,44 +145,108 @@ def create_app(config_class=Config):
         docs_dir = BASE_DIR / "docs"
         return send_from_directory(str(docs_dir), filename, mimetype="text/markdown; charset=utf-8")
 
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        if session.get("logged_in") and session.get("username"):
+            return redirect(url_for("serve_dashboard"))
+
+        csrf_token = session.get("login_csrf_token")
+        error = None
+        status_code = 200
+        if request.method == "POST":
+            submitted_token = request.form.get("csrf_token", "")
+            if not csrf_token or not hmac.compare_digest(submitted_token, csrf_token):
+                error = "Your login session expired. Please try again."
+                status_code = 400
+            else:
+                configured_username = app.config.get("DASHBOARD_USERNAME")
+                password_hash = app.config.get("DASHBOARD_PASSWORD_HASH")
+                username = request.form.get("username", "")
+                password = request.form.get("password", "")
+
+                if not configured_username or not password_hash:
+                    error = "Dashboard authentication is not configured."
+                    status_code = 503
+                elif (
+                    hmac.compare_digest(username, configured_username)
+                    and check_password_hash(password_hash, password)
+                ):
+                    session.clear()
+                    session["logged_in"] = True
+                    session["username"] = configured_username
+                    return redirect("/")
+                else:
+                    error = "Invalid username or password."
+                    status_code = 401
+
+            csrf_token = secrets.token_urlsafe(32)
+
+        if not csrf_token:
+            csrf_token = secrets.token_urlsafe(32)
+        session["login_csrf_token"] = csrf_token
+        return render_template(
+            "login.html",
+            csrf_token=csrf_token,
+            error=error,
+            username=request.form.get("username", ""),
+            auth_configured=bool(
+                app.config.get("DASHBOARD_USERNAME")
+                and app.config.get("DASHBOARD_PASSWORD_HASH")
+            ),
+        ), status_code
+
+    @app.route("/logout", methods=["GET"])
+    def logout():
+        session.clear()
+        return redirect(url_for("login"))
+
     # Root route - serves the dashboard
     @app.route("/", methods=["GET"])
+    @app.route("/index.html", methods=["GET"])
     def serve_dashboard():
-        frontend_dir = app.config.get("FRONTEND_DIR", BASE_DIR / "frontend")
-        return send_from_directory(str(frontend_dir), "index.html")
+        return render_template("index.html", username=session["username"])
 
     # Clean URL Page Routes
     @app.route("/revenue", methods=["GET"])
+    @app.route("/revenue.html", methods=["GET"])
     def serve_revenue():
-        return send_from_directory(str(app.config.get("FRONTEND_DIR", BASE_DIR / "frontend")), "revenue.html")
+        return render_template("revenue.html", username=session["username"])
 
     @app.route("/categories", methods=["GET"])
+    @app.route("/categories.html", methods=["GET"])
     def serve_categories():
-        return send_from_directory(str(app.config.get("FRONTEND_DIR", BASE_DIR / "frontend")), "categories.html")
+        return render_template("categories.html", username=session["username"])
 
     @app.route("/regions", methods=["GET"])
+    @app.route("/regions.html", methods=["GET"])
     def serve_regions():
-        return send_from_directory(str(app.config.get("FRONTEND_DIR", BASE_DIR / "frontend")), "regions.html")
+        return render_template("regions.html", username=session["username"])
 
     @app.route("/reports", methods=["GET"])
+    @app.route("/reports.html", methods=["GET"])
     def serve_reports():
-        return send_from_directory(str(app.config.get("FRONTEND_DIR", BASE_DIR / "frontend")), "reports.html")
+        return render_template("reports.html", username=session["username"])
 
     @app.route("/upload", methods=["GET"])
+    @app.route("/upload.html", methods=["GET"])
     def serve_upload():
-        return send_from_directory(str(app.config.get("FRONTEND_DIR", BASE_DIR / "frontend")), "upload.html")
+        return render_template("upload.html", username=session["username"])
 
     # Static frontend files (HTML pages, CSS, JS, Assets)
     @app.route("/<path:path>", methods=["GET"])
     def serve_frontend_static(path):
         frontend_dir = app.config.get("FRONTEND_DIR", BASE_DIR / "frontend")
+        if path.lower() == "login.html":
+            return redirect(url_for("login"))
         file_path = frontend_dir / path
         if file_path.exists() and file_path.is_file():
+            if file_path.suffix.lower() == ".html":
+                return render_template(path, username=session["username"])
             return send_from_directory(str(frontend_dir), path)
         # Support extensionless routing (e.g. /revenue -> revenue.html)
         html_path = frontend_dir / f"{path}.html"
         if html_path.exists() and html_path.is_file():
-            return send_from_directory(str(frontend_dir), f"{path}.html")
+            return render_template(f"{path}.html", username=session["username"])
         return jsonify({"status": "error", "message": f"Resource not found: {path}"}), 404
 
     # JSON Error Handlers for API endpoints

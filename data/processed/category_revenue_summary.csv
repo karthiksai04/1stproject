@@ -1,5 +1,0 @@
-category,gross_sales,discount_amount,return_amount,total_items,distinct_orders,net_sales,revenue_share_pct
-Electronics,2814542.0,74834.72,0.0,458,278,2739707.28,49.95
-Sports & Fitness,1191432.0,39012.38,0.0,388,248,1152419.62,21.01
-Home & Kitchen,1045935.0,24759.36,0.0,465,283,1021175.64,18.62
-Fashion & Apparel,592824.0,21065.23,0.0,376,248,571758.77,10.42

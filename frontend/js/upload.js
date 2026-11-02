@@ -211,6 +211,7 @@ async function executeUpload() {
                 summaryGrid.style.display = 'grid';
             }
 
+            await refreshSidebarMetrics();
             quickLinks.style.display = 'flex';
         } else {
             throw new Error(data.message || 'Failed to process dataset.');
@@ -257,6 +258,7 @@ async function executeResetToBenchmark() {
             statusMsg.textContent = '✓ Benchmark Reset Completed!';
             statusMsg.style.color = 'var(--accent-emerald)';
             statusDetails.textContent = data.message;
+            await refreshSidebarMetrics();
             quickLinks.style.display = 'flex';
         } else {
             throw new Error(data.message || 'Failed to reset benchmark data.');

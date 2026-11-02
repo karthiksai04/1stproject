@@ -4,12 +4,15 @@ Tests Flask API endpoints, database initialization, foreign key constraints,
 parameter validation, and isolated temporary SQLite instances.
 """
 
-import os
+import re
+import shutil
 import sqlite3
+from io import BytesIO
 import pytest
-from pathlib import Path
+from backend.routes import upload as upload_routes
 from backend.app import create_app
 from backend.config import Config
+from werkzeug.security import generate_password_hash
 
 
 @pytest.fixture(scope="session")
@@ -104,6 +107,8 @@ def test_app(test_db_path):
         TESTING = True
         DEBUG = False
         DATABASE_PATH = test_db_path
+        DASHBOARD_USERNAME = "test-user"
+        DASHBOARD_PASSWORD_HASH = generate_password_hash("test-password")
 
     app = create_app(TestAppConfig)
     return app
@@ -111,8 +116,186 @@ def test_app(test_db_path):
 
 @pytest.fixture
 def client(test_app):
-    """Flask test client."""
+    """Flask test client authenticated as the test dashboard user."""
+    client = test_app.test_client()
+    response = client.get("/login")
+    csrf_token = re.search(rb'name="csrf_token" value="([^"]+)"', response.data).group(1).decode()
+    client.post(
+        "/login",
+        data={
+            "csrf_token": csrf_token,
+            "username": "test-user",
+            "password": "test-password",
+        },
+    )
+    return client
+
+
+@pytest.fixture
+def anonymous_client(test_app):
+    """Flask test client without an authenticated session."""
     return test_app.test_client()
+
+
+def test_dashboard_pages_require_login(anonymous_client):
+    for path in (
+        "/",
+        "/index.html",
+        "/revenue",
+        "/revenue.html",
+        "/categories",
+        "/regions",
+        "/reports",
+        "/upload",
+    ):
+        response = anonymous_client.get(path)
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/login")
+
+
+def test_authenticated_dashboard_pages_render(client):
+    for path in (
+        "/",
+        "/index.html",
+        "/revenue",
+        "/revenue.html",
+        "/categories",
+        "/categories.html",
+        "/regions",
+        "/regions.html",
+        "/reports",
+        "/reports.html",
+        "/upload",
+        "/upload.html",
+    ):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert b"Active Session" in response.data
+        assert b"data-print-username=\"test-user\"" in response.data
+        assert b'id="sidebar-order-count"' in response.data
+
+
+def test_login_logout_and_sidebar_account(anonymous_client):
+    login_page = anonymous_client.get("/login")
+    csrf_token = re.search(rb'name="csrf_token" value="([^"]+)"', login_page.data).group(1).decode()
+
+    login_response = anonymous_client.post(
+        "/login",
+        data={
+            "csrf_token": csrf_token,
+            "username": "test-user",
+            "password": "test-password",
+        },
+    )
+    assert login_response.status_code == 302
+    assert login_response.headers["Location"] == "/"
+
+    dashboard = anonymous_client.get("/")
+    assert dashboard.status_code == 200
+    assert b"data-print-username=\"test-user\"" in dashboard.data
+    assert b"Active Session" in dashboard.data
+    assert b">test-user</span>" in dashboard.data
+
+    logout_response = anonymous_client.get("/logout")
+    assert logout_response.status_code == 302
+    assert logout_response.headers["Location"].endswith("/login")
+    assert anonymous_client.get("/").status_code == 302
+
+
+def test_login_rejects_invalid_password(anonymous_client):
+    login_page = anonymous_client.get("/login")
+    csrf_token = re.search(rb'name="csrf_token" value="([^"]+)"', login_page.data).group(1).decode()
+
+    response = anonymous_client.post(
+        "/login",
+        data={
+            "csrf_token": csrf_token,
+            "username": "test-user",
+            "password": "wrong-password",
+        },
+    )
+    assert response.status_code == 401
+    assert b"Invalid username or password." in response.data
+
+
+def test_unauthenticated_api_requires_login(anonymous_client):
+    response = anonymous_client.get("/api/kpis")
+    assert response.status_code == 401
+    assert response.get_json()["message"] == "Authentication required."
+
+
+def test_upload_refreshes_database_and_dashboard_summary(
+    test_db_path, tmp_path, monkeypatch
+):
+    database_path = tmp_path / "uploaded_data.db"
+    shutil.copy2(test_db_path, database_path)
+
+    class UploadTestConfig(Config):
+        TESTING = True
+        DEBUG = False
+        DATABASE_PATH = database_path
+        DASHBOARD_USERNAME = "test-user"
+        DASHBOARD_PASSWORD_HASH = generate_password_hash("test-password")
+
+    monkeypatch.setattr(upload_routes, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(upload_routes, "OUTPUTS_DIR", tmp_path / "outputs")
+    monkeypatch.setattr(upload_routes, "ASSETS_CHARTS_DIR", tmp_path / "assets")
+    monkeypatch.setattr(upload_routes, "run_pipeline", lambda: None)
+    monkeypatch.setattr(upload_routes, "run_kpi_analysis", lambda: None)
+    monkeypatch.setattr(upload_routes, "run_all_charts", lambda: None)
+
+    client = create_app(UploadTestConfig).test_client()
+    login_page = client.get("/login")
+    csrf_token = re.search(
+        rb'name="csrf_token" value="([^"]+)"', login_page.data
+    ).group(1).decode()
+    client.post(
+        "/login",
+        data={
+            "csrf_token": csrf_token,
+            "username": "test-user",
+            "password": "test-password",
+        },
+    )
+
+    csv_data = (
+        "order_id,date,status,region,product,category,quantity,price\n"
+        "new-1,2026-03-01,delivered,West,New Product,New Category,2,100\n"
+        "new-2,2026-03-02,shipped,East,Other Product,Other Category,1,50\n"
+    )
+    upload_response = client.post(
+        "/api/upload",
+        data={"file": (BytesIO(csv_data.encode()), "new-orders.csv")},
+        content_type="multipart/form-data",
+    )
+
+    assert upload_response.status_code == 200
+    upload_summary = upload_response.get_json()["summary"]
+    assert upload_summary["total_orders"] == 2
+    assert upload_summary["total_items"] == 2
+
+    dashboard_summary = client.get("/api/dashboard-summary").get_json()["data"]
+    assert dashboard_summary["total_orders"] == 2
+    assert dashboard_summary["delivered_orders"] == 1
+    assert dashboard_summary["total_items"] == 3
+    assert dashboard_summary["total_products"] == 2
+
+    kpis = client.get("/api/kpis?status_mode=all").get_json()["data"]
+    assert kpis["total_orders"] == 2
+    assert kpis["total_items_sold"] == 3
+    assert kpis["gross_sales"] == 250.0
+
+    categories = client.get("/api/categories?status_mode=all").get_json()["data"]
+    assert {row["category"] for row in categories} == {"New Category", "Other Category"}
+
+    regions = client.get("/api/regions?status_mode=all").get_json()["data"]
+    assert {row["region"] for row in regions} == {"West", "East"}
+
+    monthly = client.get("/api/revenue/monthly?status_mode=all").get_json()["data"]
+    assert {row["year_month"] for row in monthly} == {"2026-03"}
+
+    status_summary = client.get("/api/status-distribution").get_json()["data"]
+    assert status_summary["total_orders"] == 2
 
 
 def test_foreign_key_enforcement(test_db_path):
@@ -272,4 +455,3 @@ def test_upload_missing_file_error(client):
     res = client.post("/api/upload", data={})
     assert res.status_code == 400
     assert res.get_json()["status"] == "error"
-

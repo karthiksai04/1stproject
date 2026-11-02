@@ -5,7 +5,7 @@
 [![SQLite](https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![Pandas](https://img.shields.io/badge/Pandas-2.0%2B-150458?logo=pandas&logoColor=white)](https://pandas.pydata.org/)
 [![Chart.js](https://img.shields.io/badge/Chart.js-4.4-FF6384?logo=chartdotjs&logoColor=white)](https://www.chartjs.org/)
-[![Tests](https://img.shields.io/badge/Tests-20%20Passed-10b981?logo=pytest&logoColor=white)](https://docs.pytest.org/)
+[![Tests](https://img.shields.io/badge/Tests-25%20Passed-10b981?logo=pytest&logoColor=white)](https://docs.pytest.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 An executive, multi-page **E-Commerce Business Intelligence (BI) Dashboard** engineered for management performance reviews, academic project evaluations, and GitHub portfolio showcases.
@@ -63,7 +63,7 @@ The frontend features a bespoke executive dark theme styled after high-end marke
   - Warnings & Deductions: `#F43F5E` (Rose Red) and `#F59E0B` (Amber)
 - **Modern Typography**: Embedded Google Fonts pairing **Outfit** (headings, bold metrics) with **Inter** (tables, labels, narrative text).
 - **Dual-Currency Engine**: Instant toggle between Indian Rupee (**₹ INR**, default) and US Dollar (**$ USD**) with live recalculation and regional formatting (`₹ Lakhs/Cr` vs `$k/$M`).
-- **Offline / Standalone Fallback**: Integrated client-side dataset fallback (`DEMO_DATA`). If the Flask backend is unreachable or the application is opened statically (e.g. GitHub Pages or file server), the entire interface functions seamlessly with full sample metrics and charts.
+- **Demo Data Fallback**: Integrated client-side dataset fallback (`DEMO_DATA`) keeps analytics screens usable when API data is unavailable. Dashboard authentication is enforced by Flask; static hosting does not provide protected access.
 - **Print & PDF Mode**: Tailored `@media print` stylesheets strip dark backgrounds and sidebars, automatically generating a formal black-and-white management document suitable for submission.
 
 ---
@@ -79,7 +79,7 @@ The frontend features a bespoke executive dark theme styled after high-end marke
 | **Relational Database** | SQLite 3 (`sqlite3`) | Embedded SQL database with foreign key enforcement and multi-column indexes. |
 | **Data Analysis** | Pandas 2.0+, NumPy | Data cleaning pipeline, aggregate KPI formulations, and cohort transformations. |
 | **Static Reporting** | Matplotlib 3.11 | Headless static chart generation exporting uniform 16:9 publication PNGs. |
-| **Test Suite** | pytest 9.1 | 20 automated unit and integration tests with isolated SQLite fixtures. |
+| **Test Suite** | pytest 9.1 | 25 automated unit and integration tests with isolated SQLite fixtures. |
 
 ---
 
@@ -91,7 +91,7 @@ CartCompass-BI implements a decoupled, 3-tier architecture:
 ┌────────────────────────────────────────────────────────────────────────┐
 │             Presentation Tier (HTML5, Modern CSS3, JavaScript)         │
 │  - 6 Multi-Page Views   - Dark Theme System   - Chart.js Visualizations│
-│  - ₹ / $ Currency Engine - Live Status Pill    - Print-to-PDF Styles    │
+│  - ₹ / $ Currency Engine - Login & Sessions    - Print-to-PDF Styles    │
 │  - Drag-and-Drop Ingestion UI                  - Real-Time Recalculation│
 └───────────────────────────────────▲────────────────────────────────────┘
                                     │ JSON REST API / Static Assets
@@ -99,6 +99,7 @@ CartCompass-BI implements a decoupled, 3-tier architecture:
 │                    Flask API Tier (backend/app.py)                     │
 │  - /api/health          - /api/kpis           - /api/revenue/monthly   │
 │  - /api/categories      - /api/regions        - /api/status-distribution│
+│  - /api/dashboard-summary - Live sidebar dataset counts                │
 │  - /api/upload          - /api/template/sample-csv                     │
 │  - /api/chart-images/*  - Clean URL Routing   - Parameter Validation   │
 └───────────────────────────────────▲────────────────────────────────────┘
@@ -330,7 +331,16 @@ py database/init_db.py --force
 ```
 *Creates `cartcompass.db` populated with 750 orders, 28 products, and 1,300 order items across 14 months.*
 
-### Step 2: Start the Flask Backend Server
+### Step 2: Configure Dashboard Authentication
+For local development, the default sign-in is **admin / admin**. Change these credentials before deployment. To configure a different account, set a username, create a password hash from a hidden password prompt, and provide a strong Flask session key:
+```powershell
+$env:DASHBOARD_USERNAME = "your-admin-name"
+$env:DASHBOARD_PASSWORD_HASH = (py -c "from getpass import getpass; from werkzeug.security import generate_password_hash; print(generate_password_hash(getpass()))")
+$env:SECRET_KEY = (py -c "import secrets; print(secrets.token_hex(32))")
+```
+For production, also set `$env:FLASK_DEBUG = "False"` and `$env:SESSION_COOKIE_SECURE = "True"` when serving over HTTPS. Dashboard pages and analytics APIs require a session; `/api/health` remains public. Authentication credentials and the session key should be provided through a secret manager or environment variables, not committed to source control.
+
+### Step 3: Start the Flask Backend Server
 ```powershell
 py backend/app.py
 ```
@@ -342,8 +352,9 @@ Starting CartCompass-BI on http://127.0.0.1:5000
  * Running on http://127.0.0.1:5000
 ```
 
-### Step 3: Access the Multi-Page Dashboard in Your Browser
+### Step 4: Access the Multi-Page Dashboard in Your Browser
 Open your browser and navigate to:
+- **Sign In**: `http://127.0.0.1:5000/login`
 - **Overview Dashboard**: `http://127.0.0.1:5000/`
 - **Revenue Analytics**: `http://127.0.0.1:5000/revenue`
 - **Category Intelligence**: `http://127.0.0.1:5000/categories`
@@ -361,35 +372,7 @@ Run the automated test suite to verify database integrity, KPI calculations, and
 py -m pytest -v
 ```
 
-### Test Suite Execution Output
-```
-============================= test session starts =============================
-platform win32 -- Python 3.14.7, pytest-9.1.1
-collected 20 items
-
-tests/test_api.py::test_foreign_key_enforcement PASSED                   [  5%]
-tests/test_api.py::test_health_endpoint PASSED                           [ 10%]
-tests/test_api.py::test_kpis_endpoint PASSED                             [ 15%]
-tests/test_api.py::test_kpis_date_filtering PASSED                       [ 20%]
-tests/test_api.py::test_monthly_revenue_endpoint PASSED                  [ 25%]
-tests/test_api.py::test_categories_endpoint PASSED                       [ 30%]
-tests/test_api.py::test_regions_endpoint PASSED                          [ 35%]
-tests/test_api.py::test_revenue_growth_endpoint PASSED                   [ 40%]
-tests/test_api.py::test_status_distribution_endpoint PASSED              [ 45%]
-tests/test_api.py::test_invalid_date_validation_error PASSED             [ 50%]
-tests/test_api.py::test_nonexistent_api_endpoint_404 PASSED              [ 55%]
-tests/test_api.py::test_sample_template_download PASSED                  [ 60%]
-tests/test_api.py::test_upload_missing_file_error PASSED                 [ 65%]
-tests/test_kpis.py::test_gross_and_net_sales_calculation PASSED          [ 70%]
-tests/test_kpis.py::test_cancelled_order_exclusion PASSED                [ 75%]
-tests/test_kpis.py::test_distinct_order_counting PASSED                  [ 80%]
-tests/test_kpis.py::test_average_order_value PASSED                      [ 85%]
-tests/test_kpis.py::test_growth_rate_zero_denominator PASSED             [ 90%]
-tests/test_kpis.py::test_monthly_and_category_aggregation PASSED         [ 95%]
-tests/test_kpis.py::test_clean_and_validate_edge_cases PASSED            [100%]
-
-============================= 20 passed in 2.26s ==============================
-```
+The suite currently collects 25 tests, including authentication, session protection, API access, database integrity, and KPI calculations.
 
 ---
 
@@ -437,7 +420,7 @@ All charts are exported at 300 DPI with a standardized **16:9 widescreen ratio (
 - [x] **Executive UI/UX**: Multi-page dark terminal aesthetic, responsive navigation, and dual-currency toggle.
 - [x] **Dynamic Data Ingestion**: Drag-and-drop CSV dataset ingestion, batch validation, automated KPI recomputation, and sample template export.
 - [x] **Publication Artifacts**: 5 uniform 16:9 Matplotlib charts exported at 300 DPI.
-- [x] **Automated Testing**: 20 automated tests passing via `pytest`.
+- [x] **Automated Testing**: 25 automated tests passing via `pytest`.
 - [x] **Documentation**: Clean README, mathematical derivations (`KPI_DEFINITIONS.md`), and MIT License.
 
 ---

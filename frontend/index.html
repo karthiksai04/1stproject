@@ -13,7 +13,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
+<body data-print-username="{{ username }}">
     <div class="app-layout">
         <!-- Sidebar Navigation (Matching Reference UI) -->
         <aside class="sidebar" id="sidebar">
@@ -56,27 +56,11 @@
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                     <span>Upload Data</span>
                 </a>
+                {% include "account_profile.html" %}
             </nav>
 
-            <!-- Bottom Progress Widget (matching reference) -->
-            <div class="sidebar-widget">
-                <div class="widget-label">Annual Target (FY2025-26)</div>
-                <div class="widget-val" id="widget-target-val">₹6,000,000</div>
-                <div class="widget-progress-bg">
-                    <div class="widget-progress-bar" style="width: 82%;"></div>
-                </div>
-                <div class="widget-subtext">
-                    <span>Run Rate: 82.4%</span>
-                    <span>On Track</span>
-                </div>
-            </div>
+            {% include "sidebar_dataset_widget.html" %}
 
-            <div class="sidebar-footer">
-                <div>
-                    <span class="status-indicator" id="system-status-indicator"></span>
-                    <span id="system-status-text">Connecting...</span>
-                </div>
-            </div>
         </aside>
 
         <!-- Main Content Area -->
@@ -127,7 +111,6 @@
                 <div>
                     <strong>Data Refresh:</strong> Seeded reproducible synthetic transaction records (&bull; seed: 42). Realized sales reflect delivered orders.
                 </div>
-                <span class="mode-badge" id="mode-badge">Checking Status...</span>
             </div>
 
             <!-- Top KPI Cards Row (matching reference UI top cards) -->

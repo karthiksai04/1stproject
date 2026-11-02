@@ -60,3 +60,8 @@ Thumbs.db
 
 # Temporary log files
 *.log
+
+# Project specific data and outputs
+data/
+analysis/outputs/
+frontend/assets/charts/

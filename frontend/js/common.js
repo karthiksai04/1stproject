@@ -129,43 +129,14 @@ async function initBackendHealth() {
     try {
         const res = await fetch('/api/health');
         if (res.ok) {
-            const data = await res.json();
             AppState.isLiveMode = true;
-            updateModeBadge(true, data.database?.records?.orders || 750);
             return true;
         }
     } catch (e) {
         // Fallback to static demo data (GitHub Pages mode)
     }
     AppState.isLiveMode = false;
-    updateModeBadge(false, 750);
     return false;
-}
-
-function updateModeBadge(isLive, orderCount) {
-    const indicator = document.getElementById('system-status-indicator');
-    const statusText = document.getElementById('system-status-text');
-    const modeBadge = document.getElementById('mode-badge');
-
-    if (indicator && statusText) {
-        if (isLive) {
-            indicator.className = 'status-indicator';
-            statusText.textContent = `SQLite Connected (${orderCount} Orders)`;
-        } else {
-            indicator.className = 'status-indicator demo';
-            statusText.textContent = `Demo Mode (Static Sample Data)`;
-        }
-    }
-
-    if (modeBadge) {
-        if (isLive) {
-            modeBadge.className = 'mode-badge';
-            modeBadge.textContent = 'Live SQLite Backend';
-        } else {
-            modeBadge.className = 'mode-badge demo';
-            modeBadge.textContent = 'Demo Mode (Sample Data)';
-        }
-    }
 }
 
 // Universal Data Fetcher
@@ -249,8 +220,48 @@ async function getStatusDistributionData(params = {}) {
     return { distribution: DEMO_DATA.status_distribution, total_orders: 750 };
 }
 
+async function refreshSidebarMetrics() {
+    const orderCount = document.getElementById('sidebar-order-count');
+    if (!orderCount) return;
+
+    try {
+        const response = await fetch('/api/dashboard-summary', { cache: 'no-store' });
+        const result = await response.json();
+        if (!response.ok || result.status !== 'success') {
+            throw new Error(result.message || 'Unable to load current dataset counts.');
+        }
+
+        const summary = result.data;
+        const totalOrders = Number(summary.total_orders);
+        const deliveredOrders = Number(summary.delivered_orders);
+        const totalItems = Number(summary.total_items);
+        const deliveryRate = totalOrders > 0
+            ? Math.min(100, (deliveredOrders / totalOrders) * 100)
+            : 0;
+
+        orderCount.textContent = `${formatNumber(totalOrders)} Orders`;
+        document.getElementById('sidebar-item-count').textContent =
+            `Items: ${formatNumber(totalItems)}`;
+        document.getElementById('sidebar-delivery-progress').style.width =
+            `${deliveryRate.toFixed(1)}%`;
+        document.getElementById('sidebar-dataset-status').textContent =
+            totalOrders === 0
+                ? 'No Orders'
+                : deliveredOrders === totalOrders
+                    ? 'On Track'
+                    : 'In Progress';
+    } catch (error) {
+        console.error('Failed to refresh sidebar dataset counts:', error);
+        orderCount.textContent = 'Unavailable';
+        document.getElementById('sidebar-item-count').textContent = 'Items: --';
+        document.getElementById('sidebar-dataset-status').textContent = 'Unavailable';
+    }
+}
+
 // Setup Shared Page Controls (Currency toggle, Mobile nav, Export PDF)
 function setupSharedControls(onCurrencyChangeCallback) {
+    refreshSidebarMetrics();
+
     // Currency Switcher
     const inrBtn = document.getElementById('curr-inr');
     const usdBtn = document.getElementById('curr-usd');

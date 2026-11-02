@@ -186,6 +186,81 @@ body {
     color: #ffffff;
 }
 
+.account-profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 2px 0;
+    padding: 11px 9px;
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+}
+
+.account-avatar {
+    display: flex;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--brand-orange);
+    color: #ffffff;
+    font-weight: 800;
+}
+
+.account-details {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.account-username {
+    overflow: hidden;
+    color: var(--text-primary);
+    font-size: 0.79rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.account-session {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-muted);
+    font-size: 0.66rem;
+    white-space: nowrap;
+}
+
+.account-session-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-emerald);
+    box-shadow: 0 0 6px var(--accent-emerald);
+}
+
+.account-logout {
+    display: flex;
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    text-decoration: none;
+}
+
+.account-logout:hover {
+    background: var(--bg-sidebar-hover);
+    color: var(--text-white);
+}
+
 /* Sidebar Target/Status Widget (matching reference bottom card) */
 .sidebar-widget {
     margin: 12px;
@@ -233,31 +308,6 @@ body {
     margin-top: 6px;
     display: flex;
     justify-content: space-between;
-}
-
-.sidebar-footer {
-    padding: 12px 18px;
-    border-top: 1px solid var(--border-subtle);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
-
-.status-indicator {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background-color: var(--accent-emerald);
-    box-shadow: 0 0 8px var(--accent-emerald);
-    display: inline-block;
-    margin-right: 6px;
-}
-
-.status-indicator.demo {
-    background-color: var(--accent-amber);
-    box-shadow: 0 0 8px var(--accent-amber);
 }
 
 /* ===================================================================
@@ -417,24 +467,6 @@ body {
     font-size: 0.80rem;
     color: var(--text-secondary);
     margin-bottom: 20px;
-}
-
-.mode-badge {
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    background: rgba(16, 185, 129, 0.15);
-    color: var(--accent-emerald);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-}
-
-.mode-badge.demo {
-    background: rgba(245, 158, 11, 0.15);
-    color: var(--accent-amber);
-    border-color: rgba(245, 158, 11, 0.3);
 }
 
 /* ===================================================================
@@ -1056,9 +1088,24 @@ body {
 }
 
 /* ===================================================================
-   Print Styles (for Page 5 Reports print view)
+   Print Styles
    =================================================================== */
 @media print {
+    @page {
+        margin: 18mm 15mm 15mm;
+
+        @top-right {
+            content: "Printed for " string(print-username);
+            color: #333333;
+            font-family: sans-serif;
+            font-size: 9pt;
+        }
+    }
+
+    body {
+        string-set: print-username attr(data-print-username);
+    }
+
     body {
         background-color: #ffffff !important;
         color: #000000 !important;
@@ -1066,9 +1113,11 @@ body {
 
     .sidebar,
     .top-header .header-right,
+    .top-header nav,
     .btn,
     .mobile-toggle,
-    .filter-pill {
+    .filter-pill,
+    .account-profile {
         display: none !important;
     }
 
@@ -1099,6 +1148,118 @@ body {
         border-color: #dddddd !important;
         color: #000000 !important;
     }
+}
+
+/* Sign-in page */
+.login-page {
+    display: flex;
+    min-height: 100vh;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background:
+        radial-gradient(ellipse at top, rgba(255, 107, 0, 0.13), transparent 50%),
+        var(--bg-body);
+}
+
+.login-card {
+    width: min(100%, 420px);
+    padding: 34px;
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-lg);
+    background: var(--bg-card);
+    box-shadow: var(--shadow-card);
+}
+
+.login-brand {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    margin-bottom: 28px;
+}
+
+.login-brand-icon {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    border-radius: var(--radius-md);
+    background: var(--brand-orange);
+    color: #ffffff;
+    font-family: var(--font-heading);
+    font-size: 1.4rem;
+    font-weight: 800;
+}
+
+.login-brand h1 {
+    color: var(--text-white);
+    font-family: var(--font-heading);
+    font-size: 1.25rem;
+}
+
+.login-brand p,
+.login-help {
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+}
+
+.login-form {
+    display: grid;
+    gap: 10px;
+}
+
+.login-form label {
+    margin-top: 8px;
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.login-form input {
+    width: 100%;
+    padding: 11px 12px;
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-sm);
+    outline: none;
+    background: var(--bg-input);
+    color: var(--text-white);
+    font: inherit;
+}
+
+.login-form input:focus {
+    border-color: var(--border-focus);
+}
+
+.login-form button {
+    margin-top: 12px;
+    padding: 11px 14px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: var(--brand-orange);
+    color: #ffffff;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+}
+
+.login-form button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.login-error,
+.login-help {
+    margin-bottom: 16px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: rgba(244, 63, 94, 0.1);
+    color: #fda4af;
+    font-size: 0.82rem;
+}
+
+.login-help {
+    background: rgba(245, 158, 11, 0.1);
+    color: #fcd34d;
 }
 
 /* ===================================================================
